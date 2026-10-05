@@ -1,0 +1,18 @@
+{
+  "module": {
+    "role": {
+      "source": "../../module",
+      "captf_contract": "v1alpha1",
+      "captf_cluster": { "name": "smoke", "namespace": "default" },
+      "captf_object": { "kind": "TerraformCluster", "name": "smoke", "namespace": "default" },
+      "captf_tags": { "captf.io/test": "smoke" },
+      "control_plane_initialized": false
+    }
+  },
+  "output": {
+    "control_plane_endpoint": { "value": "${module.role.control_plane_endpoint}" },
+    "failure_domains": { "value": "${module.role.failure_domains}" },
+    "exports": { "value": "${module.role.exports}" },
+    "health": { "value": "${module.role.health}" }
+  }
+}

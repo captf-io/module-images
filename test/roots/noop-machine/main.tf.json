@@ -1,0 +1,24 @@
+{
+  "module": {
+    "role": {
+      "source": "../../module",
+      "captf_contract": "v1alpha1",
+      "captf_cluster": { "name": "smoke", "namespace": "default" },
+      "captf_object": { "kind": "TerraformMachine", "name": "smoke-md-0-abcde", "namespace": "default" },
+      "captf_cluster_outputs": { "backend_id": "noop-backend-smoke" },
+      "captf_tags": { "captf.io/test": "smoke" },
+      "machine_name": "smoke-md-0-abcde",
+      "bootstrap_data": "I2Nsb3VkLWNvbmZpZwo=",
+      "bootstrap_format": "cloud-config",
+      "failure_domain": "fd1",
+      "control_plane": false
+    }
+  },
+  "output": {
+    "provider_id": { "value": "${module.role.provider_id}" },
+    "addresses": { "value": "${module.role.addresses}" },
+    "failure_domain": { "value": "${module.role.failure_domain}" },
+    "interruptible": { "value": "${module.role.interruptible}" },
+    "health": { "value": "${module.role.health}" }
+  }
+}
