@@ -1,0 +1,82 @@
+# Copyright 2026 The CAPTF Authors.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# Module images on the captf Terraform base. One Dockerfile for every image:
+# IMAGE picks the module (build/src/<image>, which `make fetch` fills from
+# the release pinned in sources/versions.tf) and its lock file, ROLE sets
+# io.captf.role, and --target picks the final stage, which must be the role.
+#
+#   podman build -f Dockerfile.terraform --build-arg IMAGE=aws-machine \
+#     --build-arg ROLE=machine --target machine \
+#     --label 'io.captf.capacity={"cpu":"2","memory":"8Gi"}' \
+#     --label 'io.captf.node-info={"architecture":"amd64","operatingSystem":"linux"}' \
+#     -t aws-machine:terraform .
+#
+# `make build` sets all of it from images.json; Dockerfile.opentofu is the
+# same file on the OpenTofu base. Dependabot bumps the pinned FROM lines,
+# and hack/lock.sh reads the base image from the `AS mirror` line.
+
+# Hermetic provider mirror for every platform the image publishes. The
+# image's lock file pins the provider versions the mirror downloads
+# (`providers mirror` selects the version the lock file records); the exact
+# pin in the module's versions.tf agrees with it. Needs registry egress at
+# build time. The mirror holds both platforms whatever platform builds it, so
+# it runs on the build platform: no emulation for the arm64 image.
+FROM --platform=$BUILDPLATFORM ghcr.io/captf-io/terraform-base:1.16.5@sha256:974c18d5fbbbf1701bdc060b8c3838934cb4780ceb1683207ae43e48573f94e2 AS mirror
+ARG IMAGE
+USER root
+WORKDIR /src
+COPY build/src/${IMAGE}/ .
+COPY locks/terraform/${IMAGE}.terraform.lock.hcl .terraform.lock.hcl
+# get: `providers mirror` refuses a module whose nested local modules are not
+# installed. mkdir: `providers mirror` does not create the target when the
+# module requires no providers, and the COPY --from=mirror below needs it.
+RUN terraform get \
+ && mkdir -p /captf/providers \
+ && terraform providers mirror -platform=linux_amd64 -platform=linux_arm64 /captf/providers
+# This stage is not shipped. It drops root again so the last USER of every
+# stage is unprivileged (trivy DS-0002).
+USER 65532:65532
+
+FROM ghcr.io/captf-io/terraform-base:1.16.5@sha256:974c18d5fbbbf1701bdc060b8c3838934cb4780ceb1683207ae43e48573f94e2 AS module
+ARG IMAGE
+ARG ROLE
+ARG IMAGE_SOURCE=""
+ARG IMAGE_REVISION=""
+ARG IMAGE_VERSION=""
+ARG IMAGE_URL=""
+COPY --from=mirror --chown=65532:65532 /captf/providers /captf/providers
+# build/src/<image> holds the module files only (hack/fetch.sh).
+COPY --chown=65532:65532 build/src/${IMAGE}/ /captf/module
+# io.captf.contract, io.captf.runtime and io.captf.runtime.version come from
+# the base. image.version is the module release; image.url is its
+# repository.
+LABEL io.captf.role="${ROLE}" \
+      org.opencontainers.image.source="${IMAGE_SOURCE}" \
+      org.opencontainers.image.revision="${IMAGE_REVISION}" \
+      org.opencontainers.image.version="${IMAGE_VERSION}" \
+      org.opencontainers.image.url="${IMAGE_URL}"
+
+FROM module AS cluster
+
+FROM module AS machinepool
+
+# The final stage is the role. The capacity labels for scale from zero
+# (io.captf.capacity and io.captf.node-info, image contract "OCI labels")
+# describe a machine module's default instance shape, so they are per image,
+# not per role: images.json holds them, and `make build` and the publish job
+# add them with --label. The contract wants them identical on every platform
+# of the index, so the architecture is fixed there, never TARGETARCH. An
+# image without a default shape (openstack-machine) carries neither.
+FROM module AS machine

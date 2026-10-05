@@ -1,0 +1,6 @@
+# The images copy only the fetched modules (build/src/<image>/, module files
+# only; see hack/fetch.sh) and the lock files.
+*
+!build/src/
+!locks/
+build/src/*.ref

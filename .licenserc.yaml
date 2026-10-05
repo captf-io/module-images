@@ -44,6 +44,12 @@ header:
     - "**/.dockerignore"
     - "**/.gitignore"
     - "CODEOWNERS"
+    # Fetched modules and local state, never committed; .git is a file in a
+    # linked worktree.
+    - "build/**"
+    - ".cache/**"
+    - ".tools/**"
+    - ".git"
 
   comment: never
 
