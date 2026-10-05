@@ -1,0 +1,207 @@
+# Copyright 2026 The CAPTF Authors.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+name: build
+
+# Module code changes reach this repository as a version bump in
+# sources/versions.tf (Dependabot, terraform ecosystem); base image bumps as
+# a new digest in the Dockerfiles (Dependabot, docker ecosystem). Either
+# merged to main rebuilds and republishes every image.
+on:
+  pull_request:
+  push:
+    branches: [main]
+    paths-ignore: ["**.md"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  # The matrices, from images.json: one test job per cloud, one publish job
+  # per image and runtime.
+  plan:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      clouds: ${{ steps.plan.outputs.clouds }}
+      images: ${{ steps.plan.outputs.images }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - id: plan
+        run: |
+          {
+            echo "clouds=$(hack/images.sh clouds)"
+            echo "images=$(hack/images.sh matrix)"
+          } >> "$GITHUB_OUTPUT"
+
+  # The static checks: images.json, sources/versions.tf and locks/ agree,
+  # license headers, shellcheck and trivy. The module code is checked in its
+  # own repository.
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Verify
+        run: make verify ENGINE=docker
+
+  # Fetches the pinned module releases, builds each image of one cloud on
+  # both runtimes, smoke-tests it and lints it with tfcapi-lint. A pull
+  # request tests amd64 only; a push to main adds arm64.
+  test:
+    needs: plan
+    name: test (${{ matrix.cloud }}, ${{ matrix.runner }})
+    strategy:
+      fail-fast: false
+      matrix:
+        cloud: ${{ fromJSON(needs.plan.outputs.clouds) }}
+        runner: ${{ fromJSON(github.event_name == 'pull_request' && '["ubuntu-24.04"]' || '["ubuntu-24.04","ubuntu-24.04-arm"]') }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: captf-io/cluster-api-provider-terraform
+          path: .cache/provider
+          persist-credentials: false
+      # Caches the Go modules and build cache, keyed on the provider's go.sum,
+      # so building tfcapi-lint takes seconds on a warm cache.
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: .cache/provider/go.mod
+          cache-dependency-path: .cache/provider/go.sum
+      - name: Build and smoke-test
+        env:
+          CLOUD: ${{ matrix.cloud }}
+        run: make test ENGINE=docker CLOUDS="$CLOUD" PROVIDER_DIR=.cache/provider
+
+  # One multi-arch image per image and runtime, tagged with the module
+  # release: <image>:vX.Y.Z-<runtime>, and <image>:<runtime> moved to it.
+  # Every run republishes both, so a base image bump reaches the current
+  # release's tags. max-parallel keeps the org's job queue free.
+  publish:
+    needs: [plan, verify, test]
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    name: publish (${{ matrix.image }}, ${{ matrix.runtime }})
+    strategy:
+      fail-fast: false
+      max-parallel: 8
+      matrix:
+        include: ${{ fromJSON(needs.plan.outputs.images) }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # The module release, its build values and, for a machine image with a
+      # default instance shape, the capacity labels: the same values
+      # `make build` uses (hack/build.sh).
+      - name: Module
+        id: module
+        env:
+          IMAGE: ${{ matrix.image }}
+        run: |
+          make fetch IMAGES="$IMAGE"
+          hack/images.sh env "$IMAGE" > "$RUNNER_TEMP/env"
+          cat "$RUNNER_TEMP/env" >> "$GITHUB_OUTPUT"
+          capacity=$(sed -n 's/^capacity=//p' "$RUNNER_TEMP/env")
+          arch=$(sed -n 's/^arch=//p' "$RUNNER_TEMP/env")
+          {
+            echo "machine_labels<<EOF"
+            if [ -n "$capacity" ]; then
+              echo "io.captf.capacity=$capacity"
+              echo "io.captf.node-info={\"architecture\":\"$arch\",\"operatingSystem\":\"linux\"}"
+            fi
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4.4.0
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
+      - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # Labels override the ones the image inherits from Ubuntu (title,
+      # description) and the ones metadata-action derives from this
+      # repository: image.version is the module release and image.url its
+      # repository. Annotations carry the same on the manifests.
+      - uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
+        id: meta
+        env:
+          DOCKER_METADATA_ANNOTATIONS_LEVELS: index,manifest
+        with:
+          images: ghcr.io/${{ github.repository_owner }}/${{ matrix.image }}
+          flavor: latest=false
+          tags: |
+            type=raw,value=${{ steps.module.outputs.tag }}-${{ matrix.runtime }}
+            type=raw,value=${{ matrix.runtime }}
+          labels: |
+            org.opencontainers.image.title=${{ matrix.image }}
+            org.opencontainers.image.description=CAPTF ${{ matrix.image }} module ${{ steps.module.outputs.tag }} (${{ matrix.runtime }}): implements the v1alpha1 ${{ steps.module.outputs.role }} role
+            org.opencontainers.image.licenses=Apache-2.0
+            org.opencontainers.image.version=${{ steps.module.outputs.tag }}
+            org.opencontainers.image.url=https://github.com/${{ steps.module.outputs.repo }}
+          annotations: |
+            org.opencontainers.image.title=${{ matrix.image }}
+            org.opencontainers.image.description=CAPTF ${{ matrix.image }} module ${{ steps.module.outputs.tag }} (${{ matrix.runtime }}): implements the v1alpha1 ${{ steps.module.outputs.role }} role
+            org.opencontainers.image.licenses=Apache-2.0
+            org.opencontainers.image.version=${{ steps.module.outputs.tag }}
+            org.opencontainers.image.url=https://github.com/${{ steps.module.outputs.repo }}
+
+      - uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          file: Dockerfile.${{ matrix.runtime }}
+          target: ${{ steps.module.outputs.role }}
+          platforms: linux/amd64,linux/arm64
+          push: true
+          pull: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: |
+            ${{ steps.meta.outputs.labels }}
+            ${{ steps.module.outputs.machine_labels }}
+          annotations: ${{ steps.meta.outputs.annotations }}
+          build-args: |
+            IMAGE=${{ matrix.image }}
+            ROLE=${{ steps.module.outputs.role }}
+            IMAGE_SOURCE=${{ github.server_url }}/${{ github.repository }}
+            IMAGE_REVISION=${{ github.sha }}
+            IMAGE_VERSION=${{ steps.module.outputs.tag }}
+            IMAGE_URL=https://github.com/${{ steps.module.outputs.repo }}
+          # mode=max also caches the intermediate mirror stage, so a rebuild
+          # whose lock file did not change skips the provider downloads.
+          cache-from: type=gha,scope=${{ matrix.image }}-${{ matrix.runtime }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.image }}-${{ matrix.runtime }}
+          provenance: mode=max
+          sbom: true

@@ -1,0 +1,62 @@
+# Copyright 2026 The CAPTF Authors.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+version: 2
+updates:
+  # The module release each image is built from (sources/versions.tf). Daily,
+  # so a module release reaches its image within a day. A bump that changes
+  # the module's providers fails the build until the lock files follow:
+  # `make lock IMAGES=<image>`, committed to the Dependabot branch.
+  - package-ecosystem: terraform
+    directory: /sources
+    schedule:
+      interval: daily
+      time: "04:00"
+      timezone: "Etc/UTC"
+    # No auto-rebase: each rebase re-runs CI on the PR. One PR per module, so
+    # a bump that needs new locks does not hold the others back.
+    rebase-strategy: disabled
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: deps
+  # The pinned base images (tag and digest) in both Dockerfiles. hack/lock.sh
+  # reads the base image from the Dockerfile, so this is the only pin.
+  - package-ecosystem: docker
+    directory: /
+    schedule:
+      interval: weekly
+      day: wednesday
+      time: "03:00"
+      timezone: "Etc/UTC"
+    rebase-strategy: disabled
+    open-pull-requests-limit: 2
+    commit-message:
+      prefix: deps
+    groups:
+      docker:
+        patterns: ["*"]
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: wednesday
+      time: "03:00"
+      timezone: "Etc/UTC"
+    rebase-strategy: disabled
+    open-pull-requests-limit: 2
+    commit-message:
+      prefix: ci
+    groups:
+      actions:
+        patterns: ["*"]
