@@ -1,0 +1,11 @@
+# Keys allowed to sign module release tags (v<version>) in the
+# captf-io/terraform-* repositories. hack/fetch.sh checks every tag with
+# `git verify-tag` against this file (gpg.format=ssh, namespace git).
+#
+# Format: ssh-keygen(1) ALLOWED SIGNERS: <principal> namespaces="git" <public key>
+#
+# Rotation: add the new public key as an extra line BEFORE the first release
+# signed with it, and remove the old line only after every pinned tag in
+# sources/versions.tf has been re-pinned to a release signed with a key that
+# remains here (the old tags stay signed by the old key). Public keys only.
+steven@scrothers.com namespaces="git" ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAILSLQlZZmIR2rVIjFauIbP5a0ocZKdYQhA6erqu52ZdN

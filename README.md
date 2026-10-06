@@ -91,12 +91,22 @@ the commit that built it. Machine images with a default instance shape also
 carry `io.captf.capacity` and `io.captf.node-info` (image contract
 "OCI labels").
 
+## Signatures
+
+`hack/fetch.sh` only builds
+a module release whose `vX.Y.Z` tag is an annotated tag with a valid SSH
+signature from a key in [`hack/allowed_signers`](hack/allowed_signers), and
+whose tag points at the commit it fetches. A missing or bad signature fails
+the build. `LOCAL_MODULES` builds skip the check (there is no tag) and say
+so. To rotate the signing key, see the comment in `hack/allowed_signers`.
+
 ## How a release reaches an image
 
 1. A module repository tags `vX.Y.Z`; the Terraform Registry publishes it.
 2. Dependabot (daily) bumps that image's `version` in
    [`sources/versions.tf`](sources/versions.tf) in a pull request.
-3. [CI](.github/workflows/build.yml) fetches the release, builds the image
+3. [CI](.github/workflows/build.yml) fetches the release (verifying its
+   tag signature), builds the image
    on both runtimes, smoke-tests it and lints it with `tfcapi-lint`.
 4. Merged to `main`, CI publishes `<image>:vX.Y.Z-<runtime>` and moves
    `<image>:<runtime>` to it.

@@ -23,11 +23,18 @@
 # build/src/<image>.ref records what is there ("<repo> <tag> <commit>"), so
 # a second run only checks the tag with `git ls-remote` and skips the clone.
 #
+# Every release tag is verified before its commit is used: the tag must be an
+# annotated tag with a valid SSH signature (namespace git) from a key in
+# hack/allowed_signers, and it must peel to the commit that ls-remote
+# reported. A missing or bad signature, or a lightweight tag, fails the run.
+# `git verify-tag` calls ssh-keygen, so it must be installed.
+#
 # Usage: hack/fetch.sh <image>...
 # Env:   LOCAL_MODULES (a directory holding terraform-<provider>-<role>
 #        checkouts, e.g. `..`: copy each module from its working tree,
 #        uncommitted changes included, to test a module change in an image
-#        before it is released; the .ref then says `local`)
+#        before it is released; the .ref then says `local`; there is no
+#        tag, so no signature is checked)
 set -euo pipefail
 
 root=$(cd "$(dirname "$0")/.." && pwd)
@@ -74,13 +81,24 @@ for image in "$@"; do
   tmp=$(mktemp -d)
   trap 'rm -rf -- "$tmp"' EXIT
   if [[ -n ${LOCAL_MODULES:-} ]]; then
+    echo "fetch: $image: LOCAL_MODULES set, copying $src: no tag, signature NOT verified" >&2
     export_module "$src" "$tmp/module"
   else
-    # Fetch the commit the tag resolved to, not the tag: what is built is
-    # exactly what the .ref names, even if the tag moves in between.
+    # Fetch the tag object, verify its signature, and check that it peels
+    # to the commit ls-remote reported: what is built is exactly what the
+    # .ref names, even if the tag moves in between.
     git init --quiet "$tmp/repo"
-    git -C "$tmp/repo" fetch --quiet --depth 1 "$url" "$commit"
-    git -C "$tmp/repo" -c advice.detachedHead=false checkout --quiet FETCH_HEAD
+    git -C "$tmp/repo" fetch --quiet --depth 1 "$url" "+refs/tags/$tag:refs/tags/$tag"
+    [[ $(git -C "$tmp/repo" cat-file -t "refs/tags/$tag") == tag ]] \
+      || { echo "fetch.sh: $repo $tag is not an annotated tag" >&2; exit 1; }
+    git -C "$tmp/repo" \
+      -c gpg.format=ssh -c "gpg.ssh.allowedSignersFile=$root/hack/allowed_signers" \
+      verify-tag "$tag" 2>"$tmp/verify.log" \
+      || { cat "$tmp/verify.log" >&2; echo "fetch.sh: $repo $tag: signature check failed (hack/allowed_signers)" >&2; exit 1; }
+    peeled=$(git -C "$tmp/repo" rev-parse "refs/tags/$tag^{commit}")
+    [[ $peeled == "$commit" ]] || { echo "fetch.sh: $repo $tag peels to $peeled, ls-remote said $commit" >&2; exit 1; }
+    echo "fetch: $image: $tag signature verified: $(sed -n 's/^Good "git" signature for \(.*\) with .*/\1/p' "$tmp/verify.log")"
+    git -C "$tmp/repo" -c advice.detachedHead=false checkout --quiet "$commit"
     got=$(git -C "$tmp/repo" rev-parse HEAD)
     [[ $got == "$commit" ]] || { echo "fetch.sh: fetched $got from $repo, want $commit ($tag)" >&2; exit 1; }
     export_module "$tmp/repo" "$tmp/module"

@@ -44,6 +44,7 @@ header:
     - "**/.dockerignore"
     - "**/.gitignore"
     - "CODEOWNERS"
+    - "hack/allowed_signers"
     # Fetched modules and local state, never committed; .git is a file in a
     # linked worktree.
     - "build/**"
