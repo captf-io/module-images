@@ -25,7 +25,7 @@
 
 module "aws-cluster" {
   source  = "captf-io/cluster/aws"
-  version = "0.1.0"
+  version = "0.2.0"
 }
 
 module "aws-machine" {
@@ -40,22 +40,22 @@ module "aws-machinepool" {
 
 module "azure-cluster" {
   source  = "captf-io/cluster/azure"
-  version = "0.1.0"
+  version = "0.2.0"
 }
 
 module "azure-machine" {
   source  = "captf-io/machine/azure"
-  version = "0.1.0"
+  version = "0.2.0"
 }
 
 module "azure-machinepool" {
   source  = "captf-io/machinepool/azure"
-  version = "0.1.1"
+  version = "0.2.0"
 }
 
 module "gcp-cluster" {
   source  = "captf-io/cluster/google"
-  version = "0.1.0"
+  version = "0.2.0"
 }
 
 module "gcp-machine" {
