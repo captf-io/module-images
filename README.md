@@ -93,7 +93,17 @@ carry `io.captf.capacity` and `io.captf.node-info` (image contract
 
 ## Signatures
 
-`hack/fetch.sh` only builds
+Every published image digest is signed keylessly with cosign (GitHub OIDC)
+by the publish job. Verify one before you run it:
+
+```sh
+cosign verify ghcr.io/captf-io/module-images/aws-machine:v0.1.0-opentofu \
+  --certificate-identity-regexp '^https://github.com/captf-io/module-images/' \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com
+```
+
+The signature is on the digest, so it covers every tag that points at it.
+The other direction is checked at build time: `hack/fetch.sh` only builds
 a module release whose `vX.Y.Z` tag is an annotated tag with a valid SSH
 signature from a key in [`hack/allowed_signers`](hack/allowed_signers), and
 whose tag points at the commit it fetches. A missing or bad signature fails
@@ -108,8 +118,8 @@ so. To rotate the signing key, see the comment in `hack/allowed_signers`.
 3. [CI](.github/workflows/build.yml) fetches the release (verifying its
    tag signature), builds the image
    on both runtimes, smoke-tests it and lints it with `tfcapi-lint`.
-4. Merged to `main`, CI publishes `<image>:vX.Y.Z-<runtime>` and moves
-   `<image>:<runtime>` to it.
+4. Merged to `main`, CI publishes `<image>:vX.Y.Z-<runtime>`, moves
+   `<image>:<runtime>` to it and signs the digest.
 
 A release that changes the module's providers also needs new lock files:
 run `make lock IMAGES=<image>` and commit the result to the Dependabot
