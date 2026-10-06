@@ -85,6 +85,14 @@ else
   [[ -z $(label io.captf.node-info) ]] || fail "io.captf.node-info set on $what"
 fi
 
+# The variables schema is built from the module with tfcapi-lint, so it is
+# there whenever the test has tfcapi-lint; tfcapi-lint image checks it parses.
+if [[ -n ${TFCAPI_LINT:-} ]]; then
+  jq -e 'type == "object" and .type == "object" and .additionalProperties == false' \
+    <<<"$(label io.captf.variables-schema)" >/dev/null \
+    || fail "io.captf.variables-schema is missing or is not a closed object schema: '$(label io.captf.variables-schema)'"
+fi
+
 root_mount=()
 if [[ -n ${SMOKE_ROOT:-} ]]; then
   [[ -f $SMOKE_ROOT/main.tf.json ]] || { echo "smoke.sh: $SMOKE_ROOT/main.tf.json not found" >&2; exit 2; }

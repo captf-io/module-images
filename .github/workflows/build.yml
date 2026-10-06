@@ -122,21 +122,36 @@ jobs:
         with:
           persist-credentials: false
 
-      # The module release, its build values and, for a machine image with a
-      # default instance shape, the capacity labels: the same values
-      # `make build` uses (hack/build.sh).
+      # tfcapi-lint derives the io.captf.variables-schema label from the
+      # fetched module, as `make build` does.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: captf-io/cluster-api-provider-terraform
+          path: .cache/provider
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: .cache/provider/go.mod
+          cache-dependency-path: .cache/provider/go.sum
+
+      # The module release, its build values, the variables schema and, for a
+      # machine image with a default instance shape, the capacity labels: the
+      # same values `make build` uses (hack/build.sh).
       - name: Module
         id: module
         env:
           IMAGE: ${{ matrix.image }}
         run: |
           make fetch IMAGES="$IMAGE"
+          make tfcapi-lint PROVIDER_DIR=.cache/provider
+          schema=$(TFCAPI_LINT="$PWD/.tools/bin/tfcapi-lint" hack/schema.sh "$IMAGE")
           hack/images.sh env "$IMAGE" > "$RUNNER_TEMP/env"
           cat "$RUNNER_TEMP/env" >> "$GITHUB_OUTPUT"
           capacity=$(sed -n 's/^capacity=//p' "$RUNNER_TEMP/env")
           arch=$(sed -n 's/^arch=//p' "$RUNNER_TEMP/env")
           {
-            echo "machine_labels<<EOF"
+            echo "image_labels<<EOF"
+            echo "io.captf.variables-schema=$schema"
             if [ -n "$capacity" ]; then
               echo "io.captf.capacity=$capacity"
               echo "io.captf.node-info={\"architecture\":\"$arch\",\"operatingSystem\":\"linux\"}"
@@ -192,7 +207,7 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: |
             ${{ steps.meta.outputs.labels }}
-            ${{ steps.module.outputs.machine_labels }}
+            ${{ steps.module.outputs.image_labels }}
           annotations: ${{ steps.meta.outputs.annotations }}
           build-args: |
             IMAGE=${{ matrix.image }}

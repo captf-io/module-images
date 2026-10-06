@@ -73,7 +73,7 @@ if [ -z "$$bin" ] && [ -d '$(PROVIDER_DIR)/cmd/tfcapi-lint' ]; then \
 fi
 endef
 
-.PHONY: help fetch lock build test check-images check-headers fix-headers \
+.PHONY: help fetch lock build tfcapi-lint test check-images check-headers fix-headers \
 	shellcheck scan verify clean
 
 help: ## Show targets.
@@ -88,10 +88,17 @@ fetch: ## Put each image's pinned module release into build/src/<image> (hack/fe
 lock: fetch ## Regenerate locks/<runtime>/<image>.terraform.lock.hcl (linux_amd64, linux_arm64, darwin_arm64).
 	@for rt in $(RUNTIMES); do hack/lock.sh "$$rt" $(IMAGES); done
 
-build: fetch ## Build $(REGISTRY)/<image>:<module tag>-<runtime> for the host platform.
-	@for rt in $(RUNTIMES); do for img in $(IMAGES); do \
-		hack/build.sh build "$$rt" "$$img"; \
+build: fetch ## Build $(REGISTRY)/<image>:<module tag>-<runtime> for the host platform, with its variables schema label.
+	@$(RESOLVE_TFCAPI_LINT); \
+	if [ -z "$$bin" ]; then echo "build: no TFCAPI_LINT and no $(PROVIDER_DIR): the images get no io.captf.variables-schema label"; fi; \
+	for rt in $(RUNTIMES); do for img in $(IMAGES); do \
+		TFCAPI_LINT="$$bin" hack/build.sh build "$$rt" "$$img"; \
 	done; done
+
+tfcapi-lint: ## Build $(TFCAPI_LINT_BIN) from the provider repository (the publish job uses it for the schema label).
+	@$(RESOLVE_TFCAPI_LINT); \
+	[ -n "$$bin" ] || { echo "tfcapi-lint: no TFCAPI_LINT and no $(PROVIDER_DIR)" >&2; exit 1; }; \
+	echo "tfcapi-lint: $$bin"
 
 test: build ## Build, then smoke-test every image the way the runner runs it, and lint it with tfcapi-lint.
 	@$(RESOLVE_TFCAPI_LINT); \

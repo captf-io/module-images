@@ -89,7 +89,10 @@ is the module release, `org.opencontainers.image.url` the module repository,
 and `org.opencontainers.image.source` and `.revision` this repository and
 the commit that built it. Machine images with a default instance shape also
 carry `io.captf.capacity` and `io.captf.node-info` (image contract
-"OCI labels").
+"OCI labels"). Every image carries `io.captf.variables-schema`, the JSON
+Schema of the module's user variables, which `tfcapi-lint schema` derives
+from the fetched module (`hack/schema.sh`); the manager rejects variables
+that do not fit it before any Job runs.
 
 ## Signatures
 
@@ -136,7 +139,7 @@ under its current tags.
 | `Dockerfile.terraform`, `Dockerfile.opentofu` | One build for every image: `mirror → module → <role>` |
 | [`test/smoke.sh`](test/smoke.sh) | Image smoke test: contract labels, then a runner-style run, read-only and offline |
 | `test/roots/` | Root modules the smoke test applies to the noop images |
-| `hack/` | `images.sh` (reads the two files above), `fetch.sh`, `lock.sh`, `build.sh` |
+| `hack/` | `images.sh` (reads the two files above), `fetch.sh`, `lock.sh`, `schema.sh`, `build.sh` |
 
 ## Developing
 
