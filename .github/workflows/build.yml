@@ -161,7 +161,7 @@ jobs:
         env:
           DOCKER_METADATA_ANNOTATIONS_LEVELS: index,manifest
         with:
-          images: ghcr.io/${{ github.repository_owner }}/${{ matrix.image }}
+          images: ghcr.io/${{ github.repository }}/${{ matrix.image }}
           flavor: latest=false
           tags: |
             type=raw,value=${{ steps.module.outputs.tag }}-${{ matrix.runtime }}

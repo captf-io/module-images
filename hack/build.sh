@@ -21,7 +21,7 @@
 #
 # Usage: hack/build.sh <build|smoke> <terraform|opentofu> <image>
 # Env:   ENGINE (podman|docker, default podman), REGISTRY (default
-#        ghcr.io/captf-io), LOCAL_MODULES (see hack/fetch.sh),
+#        ghcr.io/captf-io/module-images), LOCAL_MODULES (see hack/fetch.sh),
 #        TFCAPI_LINT (smoke: path to tfcapi-lint, passed to test/smoke.sh)
 set -euo pipefail
 
@@ -30,7 +30,7 @@ action=${1:?$usage}
 runtime=${2:?$usage}
 name=${3:?$usage}
 engine=${ENGINE:-podman}
-registry=${REGISTRY:-ghcr.io/captf-io}
+registry=${REGISTRY:-ghcr.io/captf-io/module-images}
 
 root=$(cd "$(dirname "$0")/.." && pwd)
 cd "$root"

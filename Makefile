@@ -30,7 +30,7 @@ SHELL := bash
 # ---- Variables: override on the command line, e.g.
 # `make test CLOUDS=aws RUNTIMES=opentofu` or `make test IMAGES=noop-machine`.
 
-REGISTRY ?= ghcr.io/captf-io
+REGISTRY ?= ghcr.io/captf-io/module-images
 ENGINE ?= podman
 RUNTIMES ?= terraform opentofu
 # CLOUDS narrows IMAGES to <cloud>-*; IMAGES names images outright.
