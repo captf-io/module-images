@@ -35,7 +35,7 @@ module "aws-machine" {
 
 module "aws-machinepool" {
   source  = "captf-io/machinepool/aws"
-  version = "0.1.0"
+  version = "0.1.1"
 }
 
 module "azure-cluster" {
@@ -50,7 +50,7 @@ module "azure-machine" {
 
 module "azure-machinepool" {
   source  = "captf-io/machinepool/azure"
-  version = "0.1.0"
+  version = "0.1.1"
 }
 
 module "gcp-cluster" {
@@ -95,7 +95,7 @@ module "oci-machine" {
 
 module "oci-machinepool" {
   source  = "captf-io/machinepool/oci"
-  version = "0.1.0"
+  version = "0.1.1"
 }
 
 module "openstack-cluster" {
