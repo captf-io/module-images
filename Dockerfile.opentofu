@@ -33,7 +33,7 @@
 # pin in the module's versions.tf agrees with it. Needs registry egress at
 # build time. The mirror holds both platforms whatever platform builds it, so
 # it runs on the build platform: no emulation for the arm64 image.
-FROM --platform=$BUILDPLATFORM ghcr.io/captf-io/opentofu-base:1.12.7@sha256:eb9c589b3036f4e0914b56969c84b11ce50ea1527f49bddfb8896531547ba798 AS mirror
+FROM --platform=$BUILDPLATFORM ghcr.io/captf-io/opentofu-base:1.12.7@sha256:14119975abd505e1dc68492fee54f0e2eae17d39e73d589e011dbde50da0cd8a AS mirror
 ARG IMAGE
 USER root
 WORKDIR /src
@@ -49,7 +49,7 @@ RUN tofu get \
 # stage is unprivileged (trivy DS-0002).
 USER 65532:65532
 
-FROM ghcr.io/captf-io/opentofu-base:1.12.7@sha256:eb9c589b3036f4e0914b56969c84b11ce50ea1527f49bddfb8896531547ba798 AS module
+FROM ghcr.io/captf-io/opentofu-base:1.12.7@sha256:14119975abd505e1dc68492fee54f0e2eae17d39e73d589e011dbde50da0cd8a AS module
 ARG IMAGE
 ARG ROLE
 ARG IMAGE_SOURCE=""
