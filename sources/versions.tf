@@ -60,7 +60,7 @@ module "gcp-cluster" {
 
 module "gcp-machine" {
   source  = "captf-io/machine/google"
-  version = "0.1.0"
+  version = "0.1.1"
 }
 
 module "gcp-machinepool" {
