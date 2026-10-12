@@ -90,7 +90,7 @@ module "oci-cluster" {
 
 module "oci-machine" {
   source  = "captf-io/machine/oci"
-  version = "0.1.0"
+  version = "0.1.1"
 }
 
 module "oci-machinepool" {
