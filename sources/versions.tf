@@ -35,7 +35,7 @@ module "aws-machine" {
 
 module "aws-machinepool" {
   source  = "captf-io/machinepool/aws"
-  version = "0.1.1"
+  version = "0.1.2"
 }
 
 module "azure-cluster" {
