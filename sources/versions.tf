@@ -70,7 +70,7 @@ module "gcp-machinepool" {
 
 module "noop-cluster" {
   source  = "captf-io/cluster/noop"
-  version = "0.1.0"
+  version = "0.1.1"
 }
 
 module "noop-machine" {
