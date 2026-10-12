@@ -80,7 +80,7 @@ module "noop-machine" {
 
 module "noop-machinepool" {
   source  = "captf-io/machinepool/noop"
-  version = "0.1.0"
+  version = "0.1.1"
 }
 
 module "oci-cluster" {
